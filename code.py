@@ -123,40 +123,46 @@ def displayNormal(text1, text2, text3, text4):
         splash.append(text_area4)
 
     display.show(splash)
-    time.sleep(0.2)
+    # time.sleep(0.2)
 
 
 def requestResponseMode():
     l1 = "trm mode: (m-stop)"
+    displayNormal(l1, "", "", "")
     continueLoop = True
     while continueLoop:
         while usb_cdc.data.in_waiting == 0:
             time.sleep(0.0001)
 
         call = str(usb_cdc.data.readline(), "utf-8").strip()
-        l2 = "received " + call
+        l2 = call
         try:
             command, acquisition_time_str, acquisition_rate_str = call.split(" ")
         except Exception as e:
+            if call == "go-trm":
+                l1 = "trm mode: (m-stop)"
+                displayNormal(l1, "", "", "")
+                continueLoop = True
+                continue
             displayDebug(e, 1)
-            continue
+            return
         acquisition_time = float(acquisition_time_str)
         acquisition_rate = int(acquisition_rate_str)
+
+        # send data every second.
         if command == "g-mag-all":
             total_number_of_acquisitions = int(acquisition_rate * acquisition_time)
             t0 = supervisor.ticks_ms()
-            for j in range(int(total_number_of_acquisitions / 250)):
-                number_of_acquisitions = 250
-                # l3 = "acq total: " + str(250)
-                # l4 = "in " + acquisition_time_str + " seconds"
-                # displayNormal(l1, l2, l3, l4)
+            l4 = ""
+            for t in range(int(acquisition_time)):
+                number_of_acquisitions = acquisition_rate
                 data_array = np.empty([number_of_acquisitions, 4])
                 time_past_ms = t0
                 for i in range(number_of_acquisitions):
                     tr0 = supervisor.ticks_ms()
                     bx, by, bz = sensor.magnetic
                     tdiff = ticks_diff(supervisor.ticks_ms(), t0)
-                    data_array[i][0] = float(tdiff)
+                    data_array[i][0] = float(tdiff / 1000)
                     data_array[i][1] = bx
                     data_array[i][2] = by
                     data_array[i][3] = bz
@@ -167,12 +173,14 @@ def requestResponseMode():
 
                 senddata = data_array.tobytes() + bytes("STOPACQUISITION", 'utf-8')
                 usbl.write(senddata)
-                # l3 = "acq bytes: " + str(len(senddata))
-                # l4 = "t: %2.5f ms" % (supervisor.ticks_ms() - t0)
-                # displayNormal(l1, l2, l3, l4)
+                l3 = str(number_of_acquisitions) + " Hz, "
+                l3 += acquisition_time_str + " s"
+                l4 = str(100 * (t +1) / acquisition_time) + " %"
+                displayNormal(l1, l2, l3, l4)
         elif command == "m-stop":
             return
-
+        else:
+            return
 
 def loopMode(splash):
     continueLoop = True
